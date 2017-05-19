@@ -1,6 +1,6 @@
  # Mobile Voting Device
 
-Projekct of mobile device useful for performing voting in small groups of people ( less than 8). Voters connect to this device through WiFi network using smartphones, laptops. The device is based on ESP8266 modules and nodeMCU firmware.
+Project of mobile device designed for performing voting in small groups of people ( less than 8). Voters connect to this device through WiFi network using smartphones, laptops. The device is based on ESP8266 modules and nodeMCU firmware.
 
 Project is developed within cooperation between Technical University of Lodz and Ericsson Poland as "Mały Oxford" Program.
 
