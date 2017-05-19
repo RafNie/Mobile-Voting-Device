@@ -26,9 +26,9 @@ Device can also signal a state and result using RGB LED.
 To use this feature it is necessary to connect anode of the diodes (with suitable resistors) to the I / O pins of module. Pins are worked in PWM mode, so smooth changing of colors is possible.
 
 Pin configiration:
-red	7
-green	6
-blue	5
+red	7,
+green	6,
+blue	5,
 
 
 
