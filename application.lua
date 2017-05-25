@@ -1,4 +1,4 @@
----------- main program
+---------------- main program
 --Configuration Access Point WiFi
 print("WiFi Configuration...")
 ipcfg = {}
@@ -7,29 +7,44 @@ ipcfg.netmask="255.255.255.0"
 ipcfg.gateway="192.168.1.1"
 wifi.ap.setip(ipcfg) 
 cfg={}
-cfg.ssid="KAmodLSM303"
-cfg.pwd="12345678"
+cfg.ssid="vote.com"
+cfg.pwd="vote.com"
+cfg.max=1
 wifi.ap.config(cfg) 
 wifi.setmode(wifi.SOFTAP)
-cfg.max=1
-adminstart=0
+
 ----------------------
 
 --Global variables
 user={} --Uers table
+adminstart=0
 yesnumber=0
 nonumber=0
 usernumber=0
 title=" "
 errormes=" "
 threshold=0
+cnt = 25
+red=nil
+green=nil
+blue=1
+alreadyoff=0
 --------------------
 
---placing a server
+--LED config
+pwm.setup(5,100,0) 
+pwm.setup(6,100,0) 
+pwm.setup(7,100,0)
+pwm.start(5) 
+pwm.start(6) 
+pwm.start(7)
+-------------------------
+
+--server setup
 if sv then                
-    print("server already is placed") 
+    print("Server is already running") 
 else                      
-    print("placing the server")
+    print("Setup the server")
     sv = net.createServer(net.TCP, 30)
 end
 ------------------------
@@ -63,6 +78,7 @@ function votescounting(data)
     end
     pin=tonumber(pin)
     if user[pin]==1 then
+        errormes="Vote counted"
         i=string.find(data, "v=YES")
         if i then
             yesnumber=yesnumber+1
@@ -74,8 +90,10 @@ function votescounting(data)
             nonumber=nonumber+1
             print("NO: "..nonumber)
             user[pin]="no"
-        end  
-        print(pin.." voted "..user[pin])  
+        end
+        print(pin.." voted "..user[pin]) 
+    else
+        errormes="Vote not counted"           
     end
     
 end
@@ -94,6 +112,7 @@ function adminanalysis(data)
     button=string.sub(dat, c+1,d-1)    
     if button=="START" then
         cfg.max=usernumber
+		wifi.ap.config(cfg) 
         adminstart=2
     end
     if button=="RANDOM" then
@@ -149,11 +168,21 @@ function receiver(sck, data)
     end   
     if string.find(data, "index.html") then
         votescounting(data)
-        if ((math.max(yesnumber,nonumber))>(usernumber*threshold/100)) then
-            send(sck,1)
-            alreadysent=1
-        end
+        send(sck,1)
+        alreadysent=1
+    end
+    if string.find(data, "results.html") then
+        send(sck,1)
+        alreadysent=1
+    end
+    if string.find(data, "result_final.html") then
+        send(sck,2)
+        alreadysent=1
     end 
+    if string.find(data, "script.js") then
+        send(sck,3)
+        alreadysent=1
+    end
     if alreadysent==0 then
         send(sck)
     end        
@@ -204,24 +233,82 @@ function send(sck,voted)
         file.open("results.html")
         page=file.read()
         file.close()
-        if page  == nil then
-            page = "<html><h1>ERROR</h1></html>"                       
-        end
-        page = string.gsub(page, "#TT", title)
-        page = string.gsub(page, "#LG", yesnumber+nonumber)
-        page = string.gsub(page, "#LT", yesnumber)
-        page = string.gsub(page, "#LN", nonumber)
-        if yesnumber>nonumber then
-            page = string.gsub(page, "#W", "YES")
-        elseif nonumber>yesnumber then
-            page = string.gsub(page, "#W", "NO")
+        if ((math.max(yesnumber,nonumber))>(usernumber*threshold/100)) then
+            if page  == nil then
+                page = "<html><h1>ERROR</h1></html>"                       
+            end
+            page = string.gsub(page, "#TT", title)
+            page = string.gsub(page, "#LG", yesnumber+nonumber)
+            page = string.gsub(page, "#LT", yesnumber)
+            page = string.gsub(page, "#LN", nonumber)
+            if yesnumber>nonumber then
+                page = string.gsub(page, "#W", "YES")
+            elseif nonumber>yesnumber then
+                page = string.gsub(page, "#W", "NO")
+            else
+                page = string.gsub(page, "#W", "DRAW")
+            end
+        elseif yesnumber+nonumber==usernumber then
+            if page  == nil then
+                page = "<html><h1>ERROR</h1></html>"                       
+            end
+            page = string.gsub(page, "#TT", title)
+            page = string.gsub(page, "#LG", yesnumber+nonumber)
+            page = string.gsub(page, "#LT", yesnumber)
+            page = string.gsub(page, "#LN", nonumber)
+            page = string.gsub(page, "#W", "Voting threshold not achieved")    
         else
-            page = string.gsub(page, "#W", "DRAW")
+            local a
+            local b
+            page = string.gsub(page, "#TT", title)
+            b,a=string.find(page,'<div id="result">')
+            b=string.find(page,"</div>")            
+            page=string.gsub(page,string.sub(page,a+1,b-1),"Voting is still ongoing")
         end
-       -- pack=response..site
+        page=string.gsub(page,"#ERROR",errormes)
+        errormes=" "
+    end
+    if voted==2 then
+        if ((math.max(yesnumber,nonumber))>(usernumber*threshold/100)) then
+            file.open("result_final.html")
+            page=file.read()
+            file.close()
+            if page  == nil then
+                page = "<html><h1>ERROR</h1></html>"                       
+            end
+            page = string.gsub(page, "#LG", yesnumber+nonumber)
+            page = string.gsub(page, "#LT", yesnumber)
+            page = string.gsub(page, "#LN", nonumber)
+            if yesnumber>nonumber then
+                page = string.gsub(page, "#W", "YES")
+            elseif nonumber>yesnumber then
+                page = string.gsub(page, "#W", "NO")
+            else
+                page = string.gsub(page, "#W", "DRAW")
+            end
+        elseif yesnumber+nonumber==usernumber then
+            file.open("result_final.html")
+            page=file.read()
+            file.close()
+            if page  == nil then
+                page = "<html><h1>ERROR</h1></html>"                       
+            end
+            page = string.gsub(page, "#LG", yesnumber+nonumber)
+            page = string.gsub(page, "#LT", yesnumber)
+            page = string.gsub(page, "#LN", nonumber)
+            page = string.gsub(page, "#W", "Voting threshold not achieved")
+        else
+            page="Voting is still ongoing"
+        end
+    end
+    if voted==3 then
+        file.open("script.js")
+        page=file.read()
+        file.close()
     end
     sck:on("sent", function(sck) sck:close() end)    
     sck:send(page)  
+	collectgarbage("collect")
 end  
 -----------------------
 
@@ -234,20 +321,100 @@ end
 ------------------------
 
 --LED
-gpio.mode(0, gpio.OUTPUT)        
-ledon = 1                        
-tmr.alarm(0, 1000, 1,            
-  function ()
-    if ledon == 0 then            
-      gpio.write(0, gpio.HIGH)
-      ledon = 1
-    else                         
-      gpio.write(0, gpio.LOW)
-      ledon = 0
+function falling ()
+    if red and green and blue==nil then
+        pwm.setduty(5,cnt*40)
+        pwm.setduty(6,cnt*8)
+        pwm.setduty(7,0)
+    else
+        if alreadyoff==0 then
+            pwm.setduty(5,0)
+            pwm.setduty(6,0)
+            alreadyoff=1
+        end
+        if red then
+            pwm.setduty(5,cnt*40)
+        else
+            pwm.setduty(5,0)
+        end
+        if green then
+            pwm.setduty(6,cnt*40)
+        else
+            pwm.setduty(6,0)
+        end
+        if blue then
+            pwm.setduty(7,cnt*40)
+        else
+            pwm.setduty(7,0)
+        end
     end
-  end
-)
--------------------------
+    cnt = cnt-1
+    if cnt==0 then
+        tmr.stop(2)        
+        cnt = 25
+        tmr.alarm(2,100,1,rising)
+    end
+end
+function rising()
+    if red and green and blue==nil then
+        pwm.setduty(5,1000-cnt*40)
+        pwm.setduty(6,200-cnt*8)
+        pwm.setduty(7,0)
+    else
+        if alreadyoff==0 then
+            pwm.setduty(5,0)
+            pwm.setduty(6,0)
+            alreadyoff=1
+        end
+        if red then
+            pwm.setduty(5,1000-cnt*40)
+        else
+            pwm.setduty(5,0)
+        end
+        if green then
+            pwm.setduty(6,1000-cnt*40)
+        else
+            pwm.setduty(6,0)
+        end
+        if blue then
+            pwm.setduty(7,1000-cnt*40)
+        else
+            pwm.setduty(7,0)
+        end
+    end
+    cnt = cnt-1
+    if cnt==0 then
+        tmr.stop(2)        
+        cnt = 25
+        tmr.alarm(2,100,1,falling)
+    end
+end
+function colourchange()
+    if adminstart==2 then
+        if ((math.max(yesnumber,nonumber))>(usernumber*threshold/100)) then
+            if yesnumber>nonumber then
+                red=nil
+                green=1
+                blue=nil
+            elseif yesnumber<nonumber then
+                red=1
+                green=nil
+                blue=nil
+            else
+                red=1
+                green=1
+                blue=1                
+            end
+        else
+            red=1
+            green=1
+            blue=nil            
+        end 
+    end           
+end
+tmr.alarm(2,100,1,rising)
+tmr.alarm(1,500,1,colourchange)
+-----------------------
 
 --safety
 print("End of the code")

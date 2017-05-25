@@ -1,6 +1,6 @@
 --This file is init.lua
-local IDLE_AT_STARTUP_MS = 2000;
+local IDLE_AT_STARTUP_MS = 4500;
 
 tmr.alarm(1,IDLE_AT_STARTUP_MS,0,function()
-    dofile("application.lua") --Write your program name in dofile
+    dofile("application.lua")
 end) 
