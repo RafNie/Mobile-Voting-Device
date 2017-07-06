@@ -13,11 +13,11 @@ cfg.max=1
 wifi.ap.config(cfg) 
 wifi.setmode(wifi.SOFTAP)
 
+adminstart=0
 ----------------------
 
 --Global variables
 user={} --Uers table
-adminstart=0
 yesnumber=0
 nonumber=0
 usernumber=0
@@ -29,6 +29,8 @@ red=nil
 green=nil
 blue=1
 alreadyoff=0
+wait=0
+usrnmbr=0
 --------------------
 
 --LED config
@@ -40,29 +42,58 @@ pwm.start(6)
 pwm.start(7)
 -------------------------
 
---server setup
+--placing a server
 if sv then                
     print("Server is already running") 
 else                      
-    print("Setup the server")
+    print("Setting up the server")
     sv = net.createServer(net.TCP, 30)
 end
 ------------------------
 
 --authentication system
-function random(usernumber)
+function random(usernumber,read)
+    if read==nil then
+        read=0
+    end
+    local pinfile=' '
     local a=0
     local b=0
-    math.randomseed( tmr.now() )
-    while b~=usernumber
-    do
-        a=math.random(10000,99999)
-        if user[a] == nil then
-            user[a]=1
-            b=b+1
+    local stop=0
+    if read==1 then
+        wait=1
+        file.open("pins.txt")
+        pinfile=file.read()
+        file.close()
+        for k,v in pairs(user) do user[k]=0 end
+        while stop==0 do
+            usrnmbr=usrnmbr+1
+            b,a=string.find(pinfile,'\n')
+            user[tonumber(string.sub(pinfile,1,b-1))]=1
+            pinfile=string.sub(pinfile,a+1,string.len(pinfile))
+            if (string.sub(pinfile,a+1,string.len(pinfile)))=="" then
+                stop=1
+            end
         end
-    end
-     
+        wait=0
+    else        
+        math.randomseed( tmr.now() )
+        while b~=usernumber
+        do
+            a=math.random(10000,99999)
+            if user[a] == nil then
+                user[a]=1
+                b=b+1
+            end
+        end
+        for k,v in pairs(user) do pinfile=k..'\n'..pinfile end
+        file.remove("pins.txt")
+        file.open("pins.txt","w+")
+        file.write(pinfile)
+        file.close()
+    end 
+    --for k,v in pairs(user) do print(k.." "..v) end
+    collectgarbage("collect")
 end     
 ------------------------
 
@@ -95,7 +126,7 @@ function votescounting(data)
     else
         errormes="Vote not counted"           
     end
-    
+    collectgarbage("collect")
 end
 ---------------------------
 
@@ -112,10 +143,10 @@ function adminanalysis(data)
     button=string.sub(dat, c+1,d-1)    
     if button=="START" then
         cfg.max=usernumber
-		wifi.ap.config(cfg) 
+        wifi.ap.config(cfg) 
         adminstart=2
     end
-    if button=="RANDOM" then
+    if button=="RANDOM" or button=="READ+FROM+FILE" then
         d,c=string.find(dat,"XTITLEX=")
         d=string.find(dat, "&XUSERNUMBERX=")
         title=string.sub(dat, c+1,d-1)
@@ -135,20 +166,31 @@ function adminanalysis(data)
         d=string.find(dat, "&v=")
         threshold=tonumber(string.sub(dat, c+1,d-1))
         --print(title.." "..usernumber.." "..threshold.." ".. button)
+        if button=="READ+FROM+FILE" then            
+            usernumber=1
+        end
         if usernumber and threshold and title then
             if usernumber<=8 and usernumber>0 then
-                random(usernumber)
-                adminstart=1
+                if button=="READ+FROM+FILE" then 
+                    usernumber=0
+                    random(usernumber,1)
+                    adminstart=1
+                else
+                    random(usernumber)
+                    adminstart=1
+                end
             else
                 errormes="Number of users has to be between 0 and 8"
             end
         end
     end
+    collectgarbage("collect")
 end
 ----------------------------
 
 --service events - connection through port 80
 function receiver(sck, data)
+    usernumber=usrnmbr
     local i
     local j
     local alreadysent
@@ -157,7 +199,7 @@ function receiver(sck, data)
         print(data)
     end
     i,j=string.find(data, "\n")
-    data=string.sub(data, 1,j)  
+    data=string.sub(data, 1,j)
     if adminstart==0 or adminstart==1 then  
         if string.find(data, "admin.html") then
             adminanalysis(data)
@@ -165,14 +207,14 @@ function receiver(sck, data)
         if string.find(data, "admin1.html") then
             adminanalysis(data)
         end
-    end   
+    end
     if string.find(data, "index.html") then
         votescounting(data)
         send(sck,1)
         alreadysent=1
     end
     if string.find(data, "results.html") then
-        send(sck,1)
+        send(sck,4)
         alreadysent=1
     end
     if string.find(data, "result_final.html") then
@@ -183,9 +225,10 @@ function receiver(sck, data)
         send(sck,3)
         alreadysent=1
     end
-    if alreadysent==0 then
+    if alreadysent==0 then 
         send(sck)
-    end        
+    end 
+    collectgarbage("collect")       
 end
 ----------------------
 
@@ -208,16 +251,18 @@ function send(sck,voted)
         page = string.gsub(page,"#ERROR", errormes)     
     end
     if adminstart==1 then
-        file.open("admin1.html")
-        page=file.read()
-        file.close()
-        if page  == nil then
-            page = "<html><h1>ERROR</h1></html>"                       
+        if wait==0 then
+            file.open("admin1.html")
+            page=file.read()
+            file.close()
+            if page  == nil then
+                page = "<html><h1>ERROR</h1></html>"                       
+            end
+            for k,v in pairs(user) do piny=k.."<br>"..piny end
+            page=string.gsub(page,"#P",piny)
+            page = string.gsub(page, "#TT", title)
+            page = string.gsub(page, "#LU", usrnmbr)
         end
-        for k,v in pairs(user) do piny=piny.."<br>"..k end
-        page=string.gsub(page,"#P",piny)
-        page = string.gsub(page, "#TT", title)
-        page = string.gsub(page, "#LU", usernumber)
     end
     if adminstart==2 then
         file.open("index.html")
@@ -229,7 +274,7 @@ function send(sck,voted)
         page = string.gsub(page, "#TT", title)
        -- pack=response..site
     end
-    if voted==1 then
+    if voted==1 or voted==4 then
         file.open("results.html")
         page=file.read()
         file.close()
@@ -265,8 +310,12 @@ function send(sck,voted)
             b=string.find(page,"</div>")            
             page=string.gsub(page,string.sub(page,a+1,b-1),"Voting is still ongoing")
         end
-        page=string.gsub(page,"#ERROR",errormes)
-        errormes=" "
+        if voted==4 then
+            page=string.gsub(page,"#ERROR"," ")
+        else
+            page=string.gsub(page,"#ERROR",errormes..'<br>')
+            errormes=" "
+        end
     end
     if voted==2 then
         if ((math.max(yesnumber,nonumber))>(usernumber*threshold/100)) then
@@ -307,8 +356,8 @@ function send(sck,voted)
         file.close()
     end
     sck:on("sent", function(sck) sck:close() end)    
-    sck:send(page)  
-	collectgarbage("collect")
+    sck:send(page)
+    collectgarbage("collect")
 end  
 -----------------------
 
