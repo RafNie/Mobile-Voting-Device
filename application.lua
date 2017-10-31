@@ -29,8 +29,6 @@ red=nil
 green=nil
 blue=1
 alreadyoff=0
-wait=0
-usrnmbr=0
 --------------------
 
 --LED config
@@ -44,9 +42,9 @@ pwm.start(7)
 
 --placing a server
 if sv then                
-    print("Server is already running") 
+    print("server already is placed") 
 else                      
-    print("Setting up the server")
+    print("placing the server")
     sv = net.createServer(net.TCP, 30)
 end
 ------------------------
@@ -59,23 +57,16 @@ function random(usernumber,read)
     local pinfile=' '
     local a=0
     local b=0
-    local stop=0
     if read==1 then
-        wait=1
         file.open("pins.txt")
         pinfile=file.read()
         file.close()
         for k,v in pairs(user) do user[k]=0 end
-        while stop==0 do
-            usrnmbr=usrnmbr+1
+        for i=usernumber, 1,-1 do
             b,a=string.find(pinfile,'\n')
             user[tonumber(string.sub(pinfile,1,b-1))]=1
             pinfile=string.sub(pinfile,a+1,string.len(pinfile))
-            if (string.sub(pinfile,a+1,string.len(pinfile)))=="" then
-                stop=1
-            end
         end
-        wait=0
     else        
         math.randomseed( tmr.now() )
         while b~=usernumber
@@ -93,7 +84,7 @@ function random(usernumber,read)
         file.close()
     end 
     --for k,v in pairs(user) do print(k.." "..v) end
-    collectgarbage("collect")
+    collectgarbage("collect")    
 end     
 ------------------------
 
@@ -166,13 +157,9 @@ function adminanalysis(data)
         d=string.find(dat, "&v=")
         threshold=tonumber(string.sub(dat, c+1,d-1))
         --print(title.." "..usernumber.." "..threshold.." ".. button)
-        if button=="READ+FROM+FILE" then            
-            usernumber=1
-        end
         if usernumber and threshold and title then
             if usernumber<=8 and usernumber>0 then
                 if button=="READ+FROM+FILE" then 
-                    usernumber=0
                     random(usernumber,1)
                     adminstart=1
                 else
@@ -190,7 +177,6 @@ end
 
 --service events - connection through port 80
 function receiver(sck, data)
-    usernumber=usrnmbr
     local i
     local j
     local alreadysent
@@ -199,7 +185,7 @@ function receiver(sck, data)
         print(data)
     end
     i,j=string.find(data, "\n")
-    data=string.sub(data, 1,j)
+    data=string.sub(data, 1,j)  
     if adminstart==0 or adminstart==1 then  
         if string.find(data, "admin.html") then
             adminanalysis(data)
@@ -207,7 +193,7 @@ function receiver(sck, data)
         if string.find(data, "admin1.html") then
             adminanalysis(data)
         end
-    end
+    end   
     if string.find(data, "index.html") then
         votescounting(data)
         send(sck,1)
@@ -225,7 +211,7 @@ function receiver(sck, data)
         send(sck,3)
         alreadysent=1
     end
-    if alreadysent==0 then 
+    if alreadysent==0 then
         send(sck)
     end 
     collectgarbage("collect")       
@@ -251,18 +237,16 @@ function send(sck,voted)
         page = string.gsub(page,"#ERROR", errormes)     
     end
     if adminstart==1 then
-        if wait==0 then
-            file.open("admin1.html")
-            page=file.read()
-            file.close()
-            if page  == nil then
-                page = "<html><h1>ERROR</h1></html>"                       
-            end
-            for k,v in pairs(user) do piny=k.."<br>"..piny end
-            page=string.gsub(page,"#P",piny)
-            page = string.gsub(page, "#TT", title)
-            page = string.gsub(page, "#LU", usrnmbr)
+        file.open("admin1.html")
+        page=file.read()
+        file.close()
+        if page  == nil then
+            page = "<html><h1>ERROR</h1></html>"                       
         end
+        for k,v in pairs(user) do piny=k.."<br>"..piny end
+        page=string.gsub(page,"#P",piny)
+        page = string.gsub(page, "#TT", title)
+        page = string.gsub(page, "#LU", usernumber)
     end
     if adminstart==2 then
         file.open("index.html")
